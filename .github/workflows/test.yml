@@ -1,0 +1,70 @@
+name: Build Box64 and Compile with Android NDK
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04-arm
+
+    container:
+      image: debian:sid
+
+    steps:
+      - name: Install dependencies
+        run: |
+          apt-get update
+          apt-get install -y \
+            git \
+            wget \
+            unzip \
+            ca-certificates \
+            build-essential \
+            cmake \
+            ninja-build
+
+      - name: Clone Box64
+        run: |
+          git clone --recursive https://github.com/ptitSeb/box64.git
+
+      - name: Configure Box64
+        run: |
+          cmake -S box64 -B build \
+            -G Ninja \
+            -DARM64=ON \
+            -DCI=ON \
+            -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build Box64
+        run: |
+          cmake --build build -j"$(nproc)"
+
+      - name: Install Box64
+        run: |
+          cmake --install build
+          ldconfig
+
+      - name: Download Android NDK
+        run: |
+          wget -O ndk.zip https://dl.google.com/android/repository/android-ndk-r29-linux.zip
+          unzip -q ndk.zip
+          echo "NDK=$(pwd)/android-ndk-r29" >> "$GITHUB_ENV"
+
+      - name: Download source
+        run: |
+          wget -O hello_hwdmp_ultra.c \
+            https://raw.githubusercontent.com/JustCallMeJade/Testing-playground/main/hello_hwdmp_ultra.c
+
+      - name: Compile with x86_64 Android Clang via Box64
+        run: |
+          export PATH="$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin:$PATH"
+
+          box64 "$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/clang" \
+            --target=aarch64-linux-android35 \
+            -Wno-error \
+            hello_hwdmp_ultra.c \
+            -o hello_hwdmp_ultra
+
+      - name: Show output
+        run: |
+          file hello_hwdmp_ultra
